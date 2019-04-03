@@ -10,7 +10,7 @@ import System.IO
 import Web.Spock                    as WS
 import Web.Spock.Config
 import Data.Aeson                   hiding ( json ) -- Because we use Web.Spock.json
-import Data.Monoid                  ( (<>) )
+import Data.Monoid                  ( (<>) )                    
 import Network.HTTP.Types           ( Status, ok200, created201, accepted202
                                     , badRequest400, notFound404 )
 
@@ -18,6 +18,7 @@ import Control.Monad.Logger         ( LoggingT, runStdoutLoggingT )
 import Database.Persist             hiding ( get ) -- To avoid clash with Web.Spock.get
 import Database.Persist.Sqlite      as PSQL hiding ( get )
 import Database.Persist.TH          
+import Network.Wai.Middleware.RequestLogger ( logStdoutDev )
 
 import Data.Int
 import Data.HashMap.Strict          ( (!), keys )
@@ -54,15 +55,27 @@ main = do
     -- Migrate
     runStdoutLoggingT $ runSqlPool (do runMigration migrateAll) pool
 
-    runSpock 3000 (spock spockCfg app)
+    runSpock 3000 $ fmap (logStdoutDev.) $ spock spockCfg $ do app
 
 
 -- API
 type Api = SpockM SqlBackend () () ()
 type ApiAction a = SpockAction SqlBackend () () a
 
+
+corsHeader :: ActionCtxT b (WebStateM SqlBackend () ()) b
+corsHeader =
+    do ctx <- WS.getContext
+       WS.setHeader "Access-Control-Allow-Origin" "*"
+       WS.setHeader "Access-Control-Allow-Methods" "GET,PUT,POST,DELETE,OPTIONS"
+       WS.setHeader "Access-Control-Allow-Headers" "Content-Type, Authorization, Content-Length, X-Requested-With"
+       pure ctx
+
+
 app :: Api
-app = do
+app = prehook corsHeader $ do
+    hookAny OPTIONS (\path -> corsHeader)
+
     get "books" $ do
         allBooks <- runSQL $ selectList [] [Asc BookId]
         json $ allBooks
@@ -74,7 +87,7 @@ app = do
             Just book -> do
                 newId <- runSQL $ insert book
                 setStatus created201 
-
+    
     get "notes" $ do
         allNotes <- runSQL $ selectList [] [Asc NoteId]
         json $ allNotes
@@ -86,7 +99,7 @@ app = do
             Just note -> do
                 newId <- runSQL $ insert note
                 setStatus created201 
-        
+    
     WS.delete "notes" $ do
         maybeId <- jsonBody :: ApiAction (Maybe Int64)
         case maybeId of
