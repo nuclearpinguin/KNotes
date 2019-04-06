@@ -8,16 +8,19 @@ import qualified Data.ByteString as B
 import Data.Text.Encoding 
 import Data.Maybe           ( catMaybes )
 import Data.List            (nub)
-import Prelude hiding       (lines, unlines) 
-import Data.Text            ( Text, pack, unpack, splitOn 
-                            , lines, unlines, dropAround)
+import Prelude hiding       (lines, unlines) -- because we use those from Text
+import Data.Text            as T ( Text, splitOn, lines, unlines, 
+                            dropAround, replace, length)
 
 import Models as M
 
 -- Removes unnecessary literals
 clearAuthors :: Text -> Text
-clearAuthors ts = dropAround (\ch  -> ch `elem` [')', '\n']) ts
-
+clearAuthors ts = out
+    where
+    xs = dropAround (\ch  -> ch `elem` ['[',']', ')', '\n']) ts 
+    out = replace "_" " " xs
+    
 
 -- Creates Book from text
 textToBook :: Text -> M.Book
@@ -48,9 +51,10 @@ readNote ts =
 
 
 -- Converts raw text into notes
-makeNotes :: B.ByteString -> [M.Note]
-makeNotes = catMaybes . map readNote . splitOn "==========\n" . decodeUtf8
-
+makeNotes :: Text -> [M.Note]
+makeNotes content =
+    catMaybes $ map readNote (splitOn "==========\n"  content)
+    
 
 uniqueBooks :: [M.Note] -> [M.Book]
 uniqueBooks ns = nub $ map M.getBook ns

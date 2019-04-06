@@ -5,9 +5,13 @@
 {-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE GADTs                      #-}
 
+import Debug.Trace
+import Data.Text.Encoding (decodeUtf8)
+
 
 import System.IO
-import Web.Spock                    as WS
+import Control.Monad
+import Web.Spock                    as WS hiding ( head )
 import Web.Spock.Config
 import Data.Aeson                   hiding ( json ) -- Because we use Web.Spock.json
 import Data.Monoid                  ( (<>) )                    
@@ -17,12 +21,14 @@ import Network.HTTP.Types           ( Status, ok200, created201, accepted202
 import Control.Monad.Logger         ( LoggingT, runStdoutLoggingT )
 import Database.Persist             hiding ( get ) -- To avoid clash with Web.Spock.get
 import Database.Persist.Sqlite      as PSQL hiding ( get )
+-- import Database.Persist.PostgreSQL      as PSQL hiding ( get )
 import Database.Persist.TH          
 import Network.Wai.Middleware.RequestLogger ( logStdoutDev )
+import Network.Wai.Parse                    ( fileContent )
 
 import Data.Int
-import Data.HashMap.Strict          ( (!), keys )
-import Data.Text                    ( Text )
+import Data.HashMap.Strict          ( (!), keys, toList)
+import Data.Text                    as T ( Text, length )
 import NoteParser                   ( readNote, uniqueTitles, uniqueBooks, makeNotes )
 import Models
 
@@ -67,7 +73,7 @@ corsHeader :: ActionCtxT b (WebStateM SqlBackend () ()) b
 corsHeader =
     do ctx <- WS.getContext
        WS.setHeader "Access-Control-Allow-Origin" "*"
-       WS.setHeader "Access-Control-Allow-Methods" "GET,PUT,POST,DELETE,OPTIONS"
+       WS.setHeader "Access-Control-Allow-Methods" "GET,POST,DELETE,OPTIONS"
        WS.setHeader "Access-Control-Allow-Headers" "Content-Type, Authorization, Content-Length, X-Requested-With"
        pure ctx
 
@@ -76,11 +82,11 @@ app :: Api
 app = prehook corsHeader $ do
     hookAny OPTIONS (\path -> corsHeader)
 
-    get "books" $ do
+    WS.get "books" $ do
         allBooks <- runSQL $ selectList [] [Asc BookId]
         json $ allBooks
 
-    post "books" $ do
+    WS.post "books" $ do
         maybeBook <- jsonBody :: ApiAction (Maybe Book)
         case maybeBook of
             Nothing -> setStatus badRequest400
@@ -88,28 +94,24 @@ app = prehook corsHeader $ do
                 newId <- runSQL $ insert book
                 setStatus created201 
     
-    get "notes" $ do
+    WS.get "notes" $ do
         allNotes <- runSQL $ selectList [] [Asc NoteId]
         json $ allNotes
 
-    post "notes" $ do
-        maybeNote <- jsonBody :: ApiAction (Maybe Note)
-        case maybeNote of
-            Nothing -> setStatus badRequest400
-            Just note -> do
-                newId <- runSQL $ insert note
-                setStatus created201 
+    WS.post "notes" $ do
+        bst <- body 
+        let content = decodeUtf8 bst
+        case T.length content of
+            0 -> setStatus badRequest400
+            _ -> mapM (runSQL.insert) (makeNotes content) >> do
+                allNotes <- runSQL $ selectList [] [Asc NoteId]
+                json $ allNotes
     
     WS.delete "notes" $ do
-        maybeId <- jsonBody :: ApiAction (Maybe Int64)
+        maybeId <- param "id"
         case maybeId of
             Nothing -> setStatus badRequest400
             Just id -> do
                 rmvId <- runSQL $ PSQL.delete (makeNoteKey id)
                 setStatus accepted202 
     
-    post "test" $ do
-        txt <- body 
-        let notes = makeNotes txt
-        ids <- mapM (runSQL.insert) notes
-        json notes

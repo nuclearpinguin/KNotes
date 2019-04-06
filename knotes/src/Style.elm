@@ -9,22 +9,21 @@ makeStyle xs = List.map (\(x, y) -> style x y) xs
 
 mainDivLight : List (Attribute a)
 mainDivLight = makeStyle 
-    [ ("height", "100vh")
-    , ("width", "100vw")
-    , ("font-family", "arial")
-    , ("overflow", "hidden")
-    , ("position", "absolute")]
-
-
-mainDivDark : List (Attribute a)
-mainDivDark = makeStyle 
     [ ("height", "100%")
     , ("width", "100%")
     , ("font-family", "arial")
-    , ("overflow", "hidden")
-    , ("position", "relative")
-    , ("background-color", "#1e1e1e")
-    , ("color", "#9f9f9f")]
+    , ("position", "absolute")]
+
+
+-- mainDivDark : List (Attribute a)
+-- mainDivDark = makeStyle 
+--     [ ("height", "100%")
+--     , ("width", "100%")
+--     , ("font-family", "arial")
+--     , ("overflow", "hidden")
+--     , ("position", "relative")
+--     , ("background-color", "#1e1e1e")
+--     , ("color", "#9f9f9f")]
 
 
 navBar : List (Attribute a)
@@ -51,7 +50,7 @@ leftMenu = makeStyle
     , ("border", "4px")
     , ("border-style", "none solid none none")
     , ("border-color", "#C0C0C0")
-    , ("overflow-y", "hidden")
+    -- , ("overflow-y", "hidden")
     , ("overflow", "auto") ]
 
 
@@ -73,7 +72,8 @@ notesList = makeStyle
     [ ("float", "right")
     , ("margin-right", "5vw")
     , ("width", "70vw")
-    , ("height", "100%")]
+    , ("height", "100%")
+    , ("overflow", "auto")]
 
 
 noteDiv : List (Attribute a)
