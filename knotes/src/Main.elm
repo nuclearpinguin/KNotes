@@ -10,7 +10,7 @@ import List.Extra       exposing ( uniqueBy )
 
 -- Files,http and encode / decode
 import Json.Encode      as Encode
-import Json.Decode      as D exposing (Decoder, decodeString, field, string, list, int, map2, map4 )
+import Json.Decode      as D exposing (Decoder, string, list, int, map2, map4 )
 import Http             exposing ( Error )
 import Url.Builder      as Builder
 import File.Select      as Select
@@ -19,6 +19,8 @@ import Task
 
 -- Custom imports
 import Style
+import Notes            exposing (..)
+
 
 main =
   Browser.element 
@@ -29,17 +31,6 @@ main =
     }
 
 -- MODEL
-type alias Book = 
-  { author : String
-  , title : String}
-
-
-type alias Note = 
-  { book: Book
-  , body: String
-  , info: String
-  , id: Int
-  }
 
 type alias Load = 
   { notes: List Note
@@ -86,22 +77,6 @@ subscriptions model =
 
 -- HTTP
 
-bookDecoder : Decoder Book
-bookDecoder = 
-  map2 Book  
-    (field "author" string)
-    (field "title" string)
-
-
-noteDecoder : Decoder Note
-noteDecoder = 
-  map4 Note
-    (field "book" bookDecoder)
-    (field "body" string)
-    (field "info" string)
-    (field "id" int)
-
-
 getNotes : Cmd Msg
 getNotes =
   Http.get
@@ -136,31 +111,20 @@ uploadNotes content =
 
 -- UPDATE
 
-filterBooks : Book -> List Note -> List Note
-filterBooks bk nts = filter (\n -> n.book == bk) nts
-
-
 makeNotes : List Note -> Model
 makeNotes notes =
   let
-      bks = notes |> map (\n -> n.book) |> uniqueBy (\b -> b.title)
+      bks = map getBook (uniqueBy getTitle notes)
       initNts = initNotes bks notes
   in
     Loaded {notes = notes, selectedNotes = initNts, books = bks}
 
 
-initNotes : List Book -> List Note -> List Note
-initNotes bks nts = 
-  case List.head bks of
-    Nothing -> []
-    Just bk -> filterBooks bk nts
-
-
 filterRemovedNote : Load -> Int -> Load
 filterRemovedNote load id = 
     {load | 
-    notes = filter (\x -> (x.id /= id)) (load.notes), 
-    selectedNotes = filter (\x -> (x.id /= id)) (load.selectedNotes)
+    notes = filter (\x -> ((getId x) /= id)) (load.notes), 
+    selectedNotes = filter (\x -> ((getId x) /= id)) (load.selectedNotes)
     }
 
 
@@ -197,8 +161,8 @@ update msg model =
 makeNoteView : Note -> Html Msg
 makeNoteView note = 
   Html.div Style.noteDiv 
-    [ Html.h4 [] [Html.text note.book.title]
-    , Html.span [Attr.style "color" "#C0C0C0"] [Html.text (String.join " | " [note.book.author, note.info]) ]
+    [ Html.h4 [] [Html.text (getTitle note)]
+    , Html.span [Attr.style "color" "#C0C0C0"] [Html.text (String.join " | " [getAuthor note, getInfo note]) ]
     , Html.p [] [Html.text note.body]
     , Html.button [Event.onClick (RemoveNote note.id)] [Html.text "Remove"]
     ]
@@ -208,7 +172,7 @@ makeBookView : Book -> Html Msg
 makeBookView book = 
   Html.li 
     [Attr.style "list-style" "none"] 
-    [ Html.button ( Style.btnText ++ [Event.onClick (Select book) ]) [Html.text book.title ]]
+    [ Html.button ( Style.btnText ++ [Event.onClick (Select book) ]) [Html.text (getBookTitle book) ]]
 
 
 mainView : List (Html Msg) -> Html Msg
