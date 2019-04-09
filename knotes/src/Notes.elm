@@ -1,16 +1,19 @@
-module Notes            exposing (Book, Note, getId, getTitle 
+module Notes            exposing (Book, Note, Author, Title, getId, getTitle 
                         , getAuthor, getBody, getInfo, getBookTitle
                         , getBook, noteDecoder, bookDecoder, initNotes
-                        , filterBooks)
+                        , filterNotes, getBookAuthor, newBook)
 
 import Json.Decode      as D exposing ( Decoder, field, string
                         , list, int, map2, map4 )
 import List             exposing (..)
 
 
+type alias Author = String
+type alias Title = String
+
 type alias Book = 
-  { author : String
-  , title : String}
+  { author : Author
+  , title : Title}
 
 
 type alias Note = 
@@ -21,11 +24,12 @@ type alias Note =
   }
 
 
-getAuthor : Note -> String
+
+getAuthor : Note -> Author
 getAuthor nt = nt.book.author
 
 
-getTitle : Note -> String
+getTitle : Note -> Title
 getTitle nt = nt.book.title
 
 
@@ -44,19 +48,27 @@ getBook : Note -> Book
 getBook nt = nt.book
 
 
-getBookTitle : Book -> String
+getBookTitle : Book -> Title
 getBookTitle bk = bk.title
 
 
-filterBooks : Book -> List Note -> List Note
-filterBooks bk nts = filter (\n -> n.book == bk) nts
+getBookAuthor : Book -> Author
+getBookAuthor bk = bk.author
+
+newBook : Title -> Author -> Book
+newBook t a = {title = t, author = a}
+
+-- editBook : String ->
+
+filterNotes : Book -> List Note -> List Note
+filterNotes bk nts = filter (\n -> n.book == bk) nts
 
 
-initNotes : List Book -> List Note -> List Note
+initNotes : List Book -> List Note -> (Maybe Book, List Note)
 initNotes bks nts = 
-  case List.head bks of
-    Nothing -> []
-    Just bk -> filterBooks bk nts
+  case List.head (sortBy .title bks) of
+    Nothing -> (Nothing, [])
+    Just bk -> (Just bk, filterNotes bk nts)
 
 
 bookDecoder : Decoder Book
