@@ -1,69 +1,87 @@
 {-# LANGUAGE OverloadedStrings          #-}
 
-module NoteParser   ( readNote, uniqueAuthors
-                    , uniqueTitles, uniqueBooks
-                    , makeNotes ) where
+module NoteParser where
 
-import qualified Data.ByteString as B
-import Data.Text.Encoding 
-import Data.Maybe           ( catMaybes )
-import Data.List            (nub)
-import Prelude hiding       (lines, unlines) -- because we use those from Text
-import Data.Text            as T ( Text, splitOn, lines, unlines, 
-                            dropAround, replace, length)
+import Debug.Trace as Tr
+import System.IO
 
-import Models as M
+import Text.Parsec  as P
+import Data.Maybe   ( catMaybes )
+import Prelude      hiding ( lines, unlines ) -- because we use those from Text
+import Data.Text    as T ( Text, dropAround, replace, length, pack, strip )
+
+import Models      as M
+
+
+eol = char '\n' <|> char '\r' <|> (char '\r' >> return '\n')
+
+-- Parse note header to obtain book title and author
+titleAndAuthor :: Parsec Text () (Title, Author)
+titleAndAuthor = do
+    title <- P.many $ alphaNum <|> noneOf "\n("
+    P.char '('
+    author <- P.many $ alphaNum <|> noneOf "\n)"
+    P.string ")\n"
+    return (pack  title, pack author)
+
+
+onlyTitle :: Parsec Text () (Title, Author)
+onlyTitle = do
+    title <- P.many (alphaNum <|> noneOf "\n")
+    P.newline
+    return (pack title, "")
+
+
+noteParser :: Parsec Text () (Title, Author, Info, Body)
+noteParser = do
+    (title, author) <- (P.try titleAndAuthor) <|> onlyTitle
+    P.string "- " 
+    info <- P.many (alphaNum <|> noneOf "\n")
+    eol >> eol
+    body <- P.many (alphaNum <|> noneOf "\n")
+    eol
+    return (title, author, pack info, pack body)
+
+
+clippingsParser :: P.Parsec Text () [(Title, Author, Info, Body)]
+clippingsParser = P.many $ do
+    pair <- noteParser
+    P.string "=========="
+    eol
+    return pair
+
+
+textToNote :: (Title, Author, Info, Body) -> Maybe M.Note
+textToNote ("How to use Knotes", _, _, _) = Nothing
+textToNote (title, author, info, body) = Just $ M.createNote book body info
+    where
+        book = M.createBook (clearAuthors author) (clearTitle title)
+
+
+makeNotes :: Text -> [M.Note]
+makeNotes txt =
+    case parsed of
+        Left err -> []
+        Right nts -> catMaybes $ map textToNote nts
+    where
+        parsed = parse clippingsParser "" (replace "\r" "" txt)
 
 -- Removes unnecessary literals
-clearAuthors :: Text -> Text
+clearAuthors :: Author -> Author
 clearAuthors ts = out
     where
-    xs = dropAround (\ch  -> ch `elem` ['[',']', ')', '\n']) ts 
-    out = replace "_" " " xs
+    xs = dropAround (\ch  -> ch `elem` ['[',']', '(',')', '\n']) ts 
+    out = strip $ replace "_" " " xs
     
 
--- Creates Book from text
-textToBook :: Text -> M.Book
-textToBook info = M.Book author (head xs)
+clearTitle :: Title -> Title
+clearTitle ts = out
     where
-        xs = splitOn " (" info
-        author = clearAuthors (unlines $ tail xs)
-
-        
--- Converts splitted note's text into a Note
-parseNote :: [Text] -> M.Note
-parseNote items = M.Note book body info
-    where
-        book = textToBook $ head items
-        info = head $ tail items
-        -- 3rd tail to avoid first \n
-        body = unlines $ tail $ tail $ tail items 
+    xs = dropAround (\ch  -> ch `elem` ['[',']','\n']) ts 
+    out = strip $ replace "_" " " xs
 
 
--- TODO: this maybe unwanted
-readNote :: Text -> Maybe M.Note
-readNote ts =
-    case (head items) of
-        "How to use Knotes" -> Nothing
-        _ -> Just $ parseNote items
-    where
-        items = splitOn "\n" ts
-
-
--- Converts raw text into notes
-makeNotes :: Text -> [M.Note]
-makeNotes content =
-    catMaybes $ map readNote (splitOn "==========\n"  content)
-    
-
-uniqueBooks :: [M.Note] -> [M.Book]
-uniqueBooks ns = nub $ map M.getBook ns
-
-
-uniqueAuthors :: [M.Book] -> [Text]
-uniqueAuthors bs = map M.getAuthor bs
-
-
-uniqueTitles :: [M.Book] -> [Text]
-uniqueTitles bs = map M.getTitle bs
-
+-- test = do
+--     handle <- openFile "test.txt" ReadMode 
+--     contents <- hGetContents handle 
+--     return $ makeNotes $ pack contents

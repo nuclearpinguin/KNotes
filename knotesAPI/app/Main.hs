@@ -29,8 +29,8 @@ import Network.Wai.Parse                    ( fileContent )
 import Data.Int
 import Data.HashMap.Strict          ( (!), keys, toList)
 import Data.Text                    as T ( Text, length )
-import NoteParser                   ( readNote, uniqueTitles, uniqueBooks, makeNotes )
-import Models
+import NoteParser                   ( makeNotes )
+import Models                       as M
 
 
 runSQL :: (HasSpock m, SpockConn m ~ SqlBackend) => SqlPersistT (LoggingT IO) a -> m a
