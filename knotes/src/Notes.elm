@@ -1,10 +1,13 @@
 module Notes            exposing (Book, Note, Author, Title, getId, getTitle 
                         , getAuthor, getBody, getInfo, getBookTitle
                         , getBook, noteDecoder, bookDecoder, initNotes
-                        , filterNotes, getBookAuthor, newBook)
+                        , filterNotes, getBookAuthor, newBook
+                        , bookEncoder)
 
 import Json.Decode      as D exposing ( Decoder, field, string
                         , list, int, map2, map4 )
+
+import Json.Encode      as E exposing ( Value )                        
 import List             exposing (..)
 
 
@@ -86,3 +89,9 @@ noteDecoder =
     (field "info" string)
     (field "id" int)
 
+
+bookEncoder : Book -> Value
+bookEncoder book =
+    E.object 
+        [ ("author", E.string book.author)
+        , ("title", E.string book.title ) ]

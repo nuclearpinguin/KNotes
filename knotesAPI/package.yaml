@@ -28,10 +28,13 @@ dependencies:
 - wai-extra
 - monad-logger
 - persistent
+# - pg_config
+# - persistent-postgresql
 - persistent-sqlite
 - persistent-template
 - unordered-containers
 - bytestring
+- parsec
 
 library:
   source-dirs: src

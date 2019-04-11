@@ -32,14 +32,15 @@ share
     , mkMigrate "migrateAll"] 
     [persistLowerCase|
         Book json -- The json keyword generates sensible ToJSON and FromJSON instances
-            author Text
-            title Text
-            -- BookKey author title
+            author Author
+            title Title
+            UniqueBook author title
             deriving Show Eq
         Note json 
             book Book
-            body Text
+            body Body
             info Text
+            UniqueNote book info
             -- test Tezt default=''
             -- NoteKey body
             deriving Show Eq

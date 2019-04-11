@@ -9,7 +9,7 @@ import Html.Events      as Event
 import List.Extra       exposing ( uniqueBy )
 
 -- Files,http and encode / decode
-import Json.Encode      as Encode
+import Json.Encode      as E
 import Json.Decode      as D exposing (Decoder, string, list, int, map2, map4 )
 import Http             exposing ( Error )
 import Url.Builder      as Builder
@@ -64,6 +64,7 @@ type Msg = Nil
   | UpdateTitle Title
   | UpdateAuthor Author
   | SaveBook 
+  | BookUpdated (Result Http.Error ())
   | Cancel 
 
 
@@ -85,16 +86,16 @@ subscriptions model =
 
 -- HTTP
 
-getNotes : Cmd Msg
-getNotes =
+getNotesAPI : Cmd Msg
+getNotesAPI =
   Http.get
     { url = Builder.crossOrigin apiUrl ["notes"] []
     , expect = Http.expectJson GotNotes (list noteDecoder)
     }
 
 
-deleteNote : Int -> Cmd Msg
-deleteNote id =
+deleteNoteAPI : Int -> Cmd Msg
+deleteNoteAPI id =
   Http.request
     { method = "DELETE"
     , headers = []
@@ -105,14 +106,27 @@ deleteNote id =
     , tracker = Just "upload"
     }
 
-uploadNotes : String -> Cmd Msg
-uploadNotes content =
+uploadNotesAPI : String -> Cmd Msg
+uploadNotesAPI content =
   Http.request
     { method = "POST"
     , headers = []
     , url = Builder.crossOrigin apiUrl ["notes"] []
     , body = Http.stringBody "text/plain" content 
     , expect = Http.expectJson GotNotes (list noteDecoder)
+    , timeout = Nothing
+    , tracker = Just "upload"
+    }
+
+
+updateBookAPI : Book -> Book -> Cmd Msg
+updateBookAPI oldBk newBk =
+  Http.request
+    { method = "POST"
+    , headers = []
+    , url = Builder.crossOrigin apiUrl ["update", "book"] []
+    , body = Http.jsonBody (E.list bookEncoder [oldBk, newBk])
+    , expect = Http.expectWhatever BookUpdated
     , timeout = Nothing
     , tracker = Just "upload"
     }
@@ -139,22 +153,22 @@ filterRemovedNote load id =
 
 
 editBook : Book -> Book -> Book -> Book
-editBook b1 b2 b3= 
+editBook b1 b2 updatedBk = 
   case b1==b2 of
     False -> b1
-    True -> b3
+    True -> updatedBk 
 
 
-updateBookInfo : Load -> Book -> Load
-updateBookInfo load b3 = 
+updateBookInfo : Load -> Book -> Model
+updateBookInfo load updatedBk  = 
   let
     sbk = load.selectedBook
-    newNotes = map (\n -> {n | book = (editBook n.book sbk b3)}) load.notes
+    newNotes = map (\n -> {n | book = (editBook n.book sbk updatedBk )}) load.notes
   in
-    { notes = newNotes
-    , selectedNotes = filterNotes b3 newNotes 
-    , books = map (\b -> editBook b sbk b3) load.books
-    , selectedBook = b3}
+    Loaded { notes = newNotes
+    , selectedNotes = filterNotes updatedBk  newNotes 
+    , books = map (\b -> editBook b sbk updatedBk ) load.books
+    , selectedBook = updatedBk }
 
 
 update : Msg -> Model -> (Model, Cmd Msg)
@@ -165,8 +179,8 @@ update msg model =
   case tmp of
     (Select bk, Loaded load) -> (Loaded {load | selectedNotes = filterNotes bk load.notes, selectedBook = bk}, Cmd.none)
 
-    (RemoveNote id, Loaded load )-> (Loaded (filterRemovedNote load id), deleteNote id)
-    (RemoveNote id, _ )-> (model, deleteNote id)
+    (RemoveNote id, Loaded load )-> (Loaded (filterRemovedNote load id), deleteNoteAPI id)
+    (RemoveNote id, _ )-> (model, deleteNoteAPI id)
 
     (SelectFile, _) -> (model, Select.file ["text"] FileSelected)
     (FileSelected file, _ ) -> (model, Task.perform FileLoaded (File.toString file))
@@ -174,9 +188,9 @@ update msg model =
       case progress of 
         Http.Sending p -> (Loading (Http.fractionSent p) , Cmd.none)
         Http.Receiving _ -> (model, Cmd.none)
-    (FileLoaded content, _) -> (model, uploadNotes content)
+    (FileLoaded content, _) -> (model, uploadNotesAPI content)
     
-    (LoadNotes, _ ) -> (model, getNotes)
+    (LoadNotes, _ ) -> (model, getNotesAPI)
     (GotNotes result, _) ->
       case result of
         Ok notes ->  (makeNotes notes, Cmd.none)
@@ -185,7 +199,11 @@ update msg model =
     (EditBook, Loaded load ) -> (EditingBook load load.selectedBook, Cmd.none)
     (UpdateTitle t, EditingBook load book ) -> (EditingBook load (newBook t (getBookAuthor book)) , Cmd.none)
     (UpdateAuthor a, EditingBook load book) -> (EditingBook load (newBook (getBookTitle book) a), Cmd.none)
-    (SaveBook, EditingBook load book) -> (Loaded (updateBookInfo load book), Cmd.none)
+    (SaveBook, EditingBook load book) -> (model, updateBookAPI load.selectedBook book)
+    (BookUpdated result, EditingBook load book) ->
+      case result of
+        Ok _ ->  (updateBookInfo load book, Cmd.none)
+        Err err -> (Loaded load, Cmd.none)
     (Cancel, EditingBook load _) -> (Loaded load, Cmd.none)
 
     (_ , _) -> (model, Cmd.none)

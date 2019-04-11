@@ -82,18 +82,14 @@ app :: Api
 app = prehook corsHeader $ do
     hookAny OPTIONS (\path -> corsHeader)
 
-    WS.get "books" $ do
-        allBooks <- runSQL $ selectList [] [Asc BookId]
-        json $ allBooks
-
-    WS.post "books" $ do
-        maybeBook <- jsonBody :: ApiAction (Maybe Book)
-        case maybeBook of
+    WS.post "update/book" $ do
+        maybeBooks <- jsonBody :: ApiAction (Maybe (Book, Book))
+        case maybeBooks of
             Nothing -> setStatus badRequest400
-            Just book -> do
-                newId <- runSQL $ insert book
-                setStatus created201 
-    
+            Just (bkOld, bkNew) -> do
+                smth <- runSQL $ updateWhere [NoteBook ==. bkOld] [NoteBook =. bkNew]
+                setStatus ok200
+
     WS.get "notes" $ do
         allNotes <- runSQL $ selectList [] [Asc NoteId]
         json $ allNotes
@@ -103,7 +99,7 @@ app = prehook corsHeader $ do
         let content = decodeUtf8 bst
         case T.length content of
             0 -> setStatus badRequest400
-            _ -> mapM (runSQL.insert) (makeNotes content) >> do
+            _ -> mapM (runSQL.insertBy) (makeNotes content) >> do
                 allNotes <- runSQL $ selectList [] [Asc NoteId]
                 json $ allNotes
     
