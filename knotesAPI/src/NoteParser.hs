@@ -5,6 +5,7 @@ module NoteParser where
 import Debug.Trace as Tr
 import System.IO
 
+import Text.ParserCombinators.Parsec.Error (messageString, errorMessages)
 import Text.Parsec  as P
 import Data.Maybe   ( catMaybes )
 import Prelude      hiding ( lines, unlines ) -- because we use those from Text
@@ -22,7 +23,7 @@ titleAndAuthor = do
     P.char '('
     author <- P.many $ alphaNum <|> noneOf "\n)"
     P.string ")\n"
-    return (pack  title, pack author)
+    return (pack title, pack author)
 
 
 onlyTitle :: Parsec Text () (Title, Author)
@@ -58,11 +59,11 @@ textToNote (title, author, info, body) = Just $ M.createNote book body info
         book = M.createBook (clearAuthors author) (clearTitle title)
 
 
-makeNotes :: Text -> [M.Note]
+makeNotes :: Text -> Either Text [M.Note]
 makeNotes txt =
     case parsed of
-        Left err -> []
-        Right nts -> catMaybes $ map textToNote nts
+        Left err -> Left $ pack $ messageString $ head $ errorMessages err
+        Right nts -> Right $ catMaybes $ map textToNote nts
     where
         parsed = parse clippingsParser "" (replace "\r" "" txt)
 
@@ -80,8 +81,3 @@ clearTitle ts = out
     xs = dropAround (\ch  -> ch `elem` ['[',']','\n']) ts 
     out = strip $ replace "_" " " xs
 
-
--- test = do
---     handle <- openFile "test.txt" ReadMode 
---     contents <- hGetContents handle 
---     return $ makeNotes $ pack contents

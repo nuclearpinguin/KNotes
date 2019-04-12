@@ -41,19 +41,23 @@ runSQL action = runQuery $ \conn -> runStdoutLoggingT $ runSqlConn action conn
 errorHandler ::  Status ->  ActionCtxT () IO ()
 errorHandler s 
     | s == notFound404 = json $ object
-                        [ "result" .= String "failure"
-                        , "msg" .= String "Page not found."]
+            [ "result" .= String "failure", "msg" .= String "Page not found."]
     | otherwise = json $ object
-                    [ "result" .= String "failure"
-                    , "msg" .= String "Something very bad happened!"]
+            [ "result" .= String "failure", "msg" .= String "Something very bad happened!"]
 
-            
+
+makeResponse :: Status -> Text -> ActionCtxT b (WebStateM SqlBackend () ()) b
+makeResponse status msg = 
+    setStatus status >> json (object ["msg" .= String msg])
+
+
 -- SERVER
+
 main :: IO ()
 main = do
     -- Create db connection
     pool <- runStdoutLoggingT $ createSqlitePool "api.db" 5
-    
+
     -- Add custom error handling
     spockCfg <- (defaultSpockCfg () (PCPool pool) ()) >>= \cfg -> 
         return $ cfg {spc_errorHandler = errorHandler}
@@ -80,15 +84,7 @@ corsHeader =
 
 app :: Api
 app = prehook corsHeader $ do
-    hookAny OPTIONS (\path -> corsHeader)
-
-    WS.post "update/book" $ do
-        maybeBooks <- jsonBody :: ApiAction (Maybe (Book, Book))
-        case maybeBooks of
-            Nothing -> setStatus badRequest400
-            Just (bkOld, bkNew) -> do
-                smth <- runSQL $ updateWhere [NoteBook ==. bkOld] [NoteBook =. bkNew]
-                setStatus ok200
+    WS.hookAny OPTIONS (\path -> corsHeader)
 
     WS.get "notes" $ do
         allNotes <- runSQL $ selectList [] [Asc NoteId]
@@ -97,17 +93,26 @@ app = prehook corsHeader $ do
     WS.post "notes" $ do
         bst <- body 
         let content = decodeUtf8 bst
-        case T.length content of
-            0 -> setStatus badRequest400
-            _ -> mapM (runSQL.insertBy) (makeNotes content) >> do
+        case makeNotes content of
+            Left errmsg -> makeResponse badRequest400 errmsg
+            Right notes -> do 
+                mapM (runSQL.insertBy) notes
                 allNotes <- runSQL $ selectList [] [Asc NoteId]
                 json $ allNotes
     
     WS.delete "notes" $ do
         maybeId <- param "id"
         case maybeId of
-            Nothing -> setStatus badRequest400
+            Nothing -> makeResponse badRequest400 "Id do not exists."
             Just id -> do
                 rmvId <- runSQL $ PSQL.delete (makeNoteKey id)
-                setStatus accepted202 
+                makeResponse accepted202 "success"
+
+    WS.post "update/book" $ do
+        maybeBooks <- jsonBody :: ApiAction (Maybe (Book, Book))
+        case maybeBooks of
+            Nothing -> makeResponse badRequest400 "JSON body corrupted"
+            Just (bkOld, bkNew) -> do
+                smth <- runSQL $ updateWhere [NoteBook ==. bkOld] [NoteBook =. bkNew]
+                makeResponse ok200 "success"
     
