@@ -1,141 +1,142 @@
 module Style            exposing (..)
-import Html             exposing (Attribute)
-import Html.Attributes  exposing (style)
-import Html.Events      as Event
+import Html
 
+import Css              exposing (..)
+import Html.Styled      exposing (..)
+import Html.Styled.Attributes exposing (css, href, src)
+import Html.Styled.Events     exposing (onClick)
 
-makeStyle : List (String, String) -> List (Attribute a)
-makeStyle xs = List.map (\(x, y) -> style x y) xs
 
 -- Main view
+mainDivLight : Attribute a
+mainDivLight = css
+    [ minHeight (pct 100)
+    , minWidth (pct 100)
+    , fontFamilies [ "Arial" ]
+    , position relative ]
 
-mainDivLight : List (Attribute a)
-mainDivLight = makeStyle 
-    [ ("min-height", "100%")
-    , ("min-width", "100%")
-    , ("font-family", "arial")
-    , ("position", "relative")]
 
 -- Navbar view
 
-navBarLogo : List (Attribute a)
-navBarLogo = makeStyle
-    [ ("font-family", "arial")
-    , ("font-weight", "bold")
-    , ("font-size", "42pt")
-    , ("text-align", "center")
-    , ("position", "fixed")
-    , ("background-color", "white")
-    , ("width", "15vw")
-    , ("height", "7vh")]
+navBarLogo : Attribute a
+navBarLogo = css
+    [ fontWeight bold
+    , fontSize (pt 42)
+    , textAlign center
+    , position fixed
+    , backgroundColor (hex "FFFFFF")
+    , width (vw 15)
+    , height (vh 7)]
 
 
-leftMenu : List (Attribute a)
-leftMenu = makeStyle
-    [ ("width", "15vw")
-    , ("height", "100%")
-    , ("position", "fixed")    
-    , ("border", "4px")
-    , ("border-style", "none solid none none")
-    , ("border-color", "#C0C0C0")
-    , ("overflow-y", "scroll")
-    , ("padding-right", "30px")
-    , ("box-sizing", "content-box")]
+
+leftMenu : Attribute a
+leftMenu = css
+    [ width (vw 15)
+    , height (pct 100)
+    , position fixed
+    , borderRight2 (px 4) solid 
+    , borderColor (hex "#C0C0C0")
+    , overflowY scroll
+    , boxSizing contentBox]
 
 
-btnText : List (Attribute a) 
-btnText = makeStyle  
-    [ ("border", "none")
-    , ("background-color", "inherit")
-    , ("padding", "10px")
-    , ("font-size", "12pt")
-    , ("cursor", "pointer")
-    , ("width", "100%")
-    , ("text-align", "left")
-    , ("color", "black")
+btnText : Attribute a 
+btnText = css
+    [ border (px 0)
+    , backgroundColor inherit
+    , padding (px 10)
+    , fontSize (pt 12)
+    , cursor pointer
+    , width (pct 100)
+    , textAlign left
+    , color (hex "#0000000")
+    , hover [fontWeight bold]
     ]
 
 -- Notes view
 
-notesView : List (Attribute a)
-notesView = makeStyle
-    [ ("float", "right")
-    , ("margin-right", "5vw")
-    , ("width", "70vw")]
+notesView : Attribute a
+notesView = css
+    [ float right
+    , marginRight (vw 5)
+    , width (vw 70)]
+
+boldHeader : Attribute a
+boldHeader = css
+    [ fontFamilies [ "Arial" ]
+    , fontWeight bold
+    , fontSize (pt 42)
+    , textAlign left
+    , position relative
+    , height auto
+    , overflowY auto
+    , paddingBottom (px 50)
+    , overflowX hidden]
 
 
-boldHeader : List (Attribute a)
-boldHeader = makeStyle
-    [ ("font-family", "arial")
-    , ("font-weight", "bold")
-    , ("font-size", "42pt")
-    , ("text-align", "left")
-    , ("position", "relative")
-    , ("height", "auto")
-    , ("overflow-y", "auto")
-    , ("padding-bottom", "50px")
-    , ("overflow-x", "hidden")]
+bigTextArea: Attribute a
+bigTextArea = css
+    [ fontFamilies [ "Arial" ]
+    , fontWeight bold
+    , fontSize (pt 42)
+    , textAlign left
+    , width (pct 100)
+    , minHeight (pt 46)
+    , resize none
+    , border (px 0)
+    , overflow hidden]
 
 
-bigTextArea: List (Attribute a)
-bigTextArea = makeStyle
-    [ ("font-family", "arial")
-    , ("font-weight", "bold")
-    , ("font-size", "42pt")
-    , ("text-align", "left")
-    , ("width", "100%")
-    , ("min-height", "46pt")
-    , ("resize", "none")
-    , ("border", "none")
-    , ("overflow", "hidden")]
+notesList : Attribute a
+notesList = css
+    [ overflowY auto
+    , position relative]
 
 
-notesList : List (Attribute a)
-notesList = makeStyle
-    [ ("overflow-y", "auto")
-    , ("position", "relative")]
-
-
-noteDiv : List (Attribute a)
-noteDiv = makeStyle  
-    [ ("padding-bottom", "20px")
-    , ("text-align", "left") ]
+noteDiv : Attribute a
+noteDiv = css  
+    [ paddingBottom (px 20)
+    , textAlign left ]
     
 
-button : List (Attribute a)
-button = makeStyle
-    [ ("text-transform", "uppercase")
-    , ("background", "#ffffff")
-    , ("font-size", "12pt")
-    , ("color", "#C0C0C0")
-    , ("cursor", "pointer")
-    , ("border", "none")
+button : Attribute a
+button = css
+    [ textTransform uppercase
+    , backgroundColor (hex "#ffffff")
+    , fontSize (pt 12)
+    , color  (hex "#C0C0C0")
+    , cursor pointer
+    , border (px 0)
+    , hover [fontWeight bold]
     ]
 
 -- Empty view 
 
-emptyView : List (Attribute a)
-emptyView = makeStyle
-    [ ("text-align", "center")
-    , ("font-size", "24pt")
-    , ("width", "100%")
-    , ("height", "300px")
+emptyView : Attribute a
+emptyView = css
+    [ textAlign center
+    , fontSize (pt 24)
+    , width (pct 100)
+    , height (px 300)
     ]
 
 
-emptyLogo : List (Attribute a)
-emptyLogo = makeStyle
-    [ ("font-family", "arial")
-    , ("font-weight", "bold")
-    , ("font-size", "144pt")
-    , ("text-align", "center")]
+emptyLogo : Attribute a
+emptyLogo = css
+    [ fontFamilies [ "Arial" ]
+    , fontWeight bold
+    , fontSize (pt 144)
+    , textAlign center]
 
 
-bigButton: List (Attribute a)
-bigButton = makeStyle
-    [ ("text-transform", "uppercase")
-    , ("background", "inherit")
-    , ("font-size", "24pt")
-    , ("color", "#C0C0C0")
-    , ("cursor", "pointer")
-    , ("border", "none")]
+bigButton : Attribute a
+bigButton = css
+    [ textTransform uppercase
+    , backgroundColor inherit
+    , fontSize (pt 24)
+    , color (hex "#C0C0C0")
+    , cursor pointer
+    , border (px 0)
+    , hover [fontWeight bold]]
+

@@ -2,11 +2,13 @@ module Main             exposing ( .. )
 
 import Debug            exposing ( log, toString )
 import List             exposing  ( .. )
-import Browser
-import Html             exposing  ( Html, Attribute )
-import Html.Attributes  as Attr
-import Html.Events      as Event
 import List.Extra       exposing ( uniqueBy )
+
+import Browser
+import Css              exposing (..)
+import Html.Styled      as Styled exposing (..)
+import Html.Styled.Attributes as Attr
+import Html.Styled.Events     as Event 
 
 -- Files,http and encode / decode
 import Json.Encode      as E
@@ -26,7 +28,7 @@ main =
   Browser.element 
     { init = init
     , update = update
-    , view = view
+    , view = view >> toUnstyled
     , subscriptions = subscriptions
     }
 
@@ -106,6 +108,7 @@ deleteNoteAPI id =
     , tracker = Just "upload"
     }
 
+
 uploadNotesAPI : String -> Cmd Msg
 uploadNotesAPI content =
   Http.request
@@ -136,7 +139,7 @@ updateBookAPI oldBk newBk =
 makeNotes : List Note -> Model
 makeNotes notes =
   let
-      bks = map getBook (uniqueBy getTitle notes)
+      bks = List.map getBook (uniqueBy getTitle notes)
       (book, initNts) = initNotes bks notes
   in
   case book of
@@ -163,11 +166,11 @@ updateBookInfo : Load -> Book -> Model
 updateBookInfo load updatedBk  = 
   let
     sbk = load.selectedBook
-    newNotes = map (\n -> {n | book = (editBook n.book sbk updatedBk )}) load.notes
+    newNotes = List.map (\n -> {n | book = (editBook n.book sbk updatedBk )}) load.notes
   in
     Loaded { notes = newNotes
     , selectedNotes = filterNotes updatedBk  newNotes 
-    , books = map (\b -> editBook b sbk updatedBk ) load.books
+    , books = List.map (\b -> editBook b sbk updatedBk ) load.books
     , selectedBook = updatedBk }
 
 
@@ -177,25 +180,29 @@ update msg model =
       tmp = (msg, model)
   in
   case tmp of
+    -- User select book to see list of notes
     (Select bk, Loaded load) -> (Loaded {load | selectedNotes = filterNotes bk load.notes, selectedBook = bk}, Cmd.none)
 
+    -- Removes one note
     (RemoveNote id, Loaded load )-> (Loaded (filterRemovedNote load id), deleteNoteAPI id)
-    (RemoveNote id, _ )-> (model, deleteNoteAPI id)
 
-    (SelectFile, _) -> (model, Select.file ["text"] FileSelected)
+    -- Upload of the clippings.txt
+    (SelectFile, _ ) -> (model, Select.file ["text"] FileSelected)
     (FileSelected file, _ ) -> (model, Task.perform FileLoaded (File.toString file))
-    (Uploading progress , _) -> 
+    (Uploading progress , _ ) -> 
       case progress of 
         Http.Sending p -> (Loading (Http.fractionSent p) , Cmd.none)
         Http.Receiving _ -> (model, Cmd.none)
     (FileLoaded content, _) -> (model, uploadNotesAPI content)
     
+    -- Get list of notes from server
     (LoadNotes, _ ) -> (model, getNotesAPI)
-    (GotNotes result, _) ->
+    (GotNotes result, _ ) ->
       case result of
         Ok notes ->  (makeNotes notes, Cmd.none)
         Err err -> (Failure err, Cmd.none)
 
+    -- Book info editing and update
     (EditBook, Loaded load ) -> (EditingBook load load.selectedBook, Cmd.none)
     (UpdateTitle t, EditingBook load book ) -> (EditingBook load (newBook t (getBookAuthor book)) , Cmd.none)
     (UpdateAuthor a, EditingBook load book) -> (EditingBook load (newBook (getBookTitle book) a), Cmd.none)
@@ -204,13 +211,15 @@ update msg model =
       case result of
         Ok _ ->  (updateBookInfo load book, Cmd.none)
         Err err -> (Loaded load, Cmd.none)
-    (Cancel, EditingBook load _) -> (Loaded load, Cmd.none)
+    (Cancel, EditingBook load _ ) -> (Loaded load, Cmd.none)
 
-    (_ , _) -> (model, Cmd.none)
+    -- Otherwise do nothing 
+    ( _ , _ ) -> (model, Cmd.none)
 
 
 -- VIEW
-view : Model -> Html Msg
+
+view : Model -> Styled.Html Msg
 view model =
   case model of
     New -> emptyView |> mainView
@@ -220,107 +229,112 @@ view model =
     EditingBook load book -> (load, book) |> loadedViewEditBook |> mainView 
 
 
-makeNoteView : Note -> Html Msg
+makeNoteView : Note -> Styled.Html Msg
 makeNoteView note = 
-  Html.div S.noteDiv 
-    [ Html.span [Attr.style "color" "#606060"] [Html.text (getInfo note) ]
-    , Html.button (S.button ++ [Event.onClick (RemoveNote note.id)]) [Html.text "Remove"]
-    , Html.p [] [Html.text note.body]
+  Styled.div [S.noteDiv] 
+    [ Styled.span [Attr.css [color (hex "#606060")]] [Styled.text (getInfo note) ]
+    , Styled.button ([S.button] ++ [Event.onClick (RemoveNote note.id)]) [Styled.text "Remove"]
+    , Styled.p [] [Styled.text note.body]
     ]
 
 
-makeNoteHeader : Book -> Html Msg
+makeNoteHeader : Book -> Styled.Html Msg
 makeNoteHeader bk = 
-  Html.div S.boldHeader
-    [ Html.text (getBookTitle bk)
-    , Html.div [Attr.style "color" "#606060"] [Html.text (getBookAuthor bk)]
-    , Html.button (S.button ++ [Event.onClick EditBook]) [Html.text "Edit"]
+  Styled.div [S.boldHeader]
+    [ Styled.text (getBookTitle bk)
+    , Styled.div [Attr.css [color (hex "#606060")]] [Styled.text (getBookAuthor bk)]
+    , Styled.button ([S.button] ++ [Event.onClick EditBook]) [Styled.text "Edit"]
     ]
 
 
-editNoteHeader : Book -> Html Msg
+editNoteHeader : Book -> Styled.Html Msg
 editNoteHeader book = 
   let
       title = getBookTitle book
       author = getBookAuthor book
   in
-  Html.div S.boldHeader
-    [ Html.textarea 
-        ([Attr.value title, Event.onInput UpdateTitle] ++ S.bigTextArea) 
-        [Html.text title] 
-    , Html.textarea 
-        ([Attr.value author, Event.onInput UpdateAuthor] ++ S.bigTextArea ++ [Attr.style "color" "#606060"]) 
-        [Html.text author]
-    , Html.button (S.button ++ [Event.onClick SaveBook]) [Html.text "Save"]
-    , Html.button (S.button ++ [Event.onClick Cancel]) [Html.text "Cancel"]
+  Styled.div [S.boldHeader]
+    [ Styled.textarea 
+        ([Attr.value title, Event.onInput UpdateTitle] ++ [S.bigTextArea]) 
+        [Styled.text title] 
+    , Styled.textarea 
+        ([Attr.value author, Event.onInput UpdateAuthor] ++ [S.bigTextArea] ++ [Attr.css [color (hex "#606060")]]) 
+        [Styled.text author]
+    , Styled.button ([S.button] ++ [Event.onClick SaveBook]) [Styled.text "Save"]
+    , Styled.button ([S.button] ++ [Event.onClick Cancel]) [Styled.text "Cancel"]
     ]
 
 
-makeBookView: Book -> Book-> Html Msg
+makeBookView : Book -> Book -> Styled.Html Msg
 makeBookView book selectedBook =  
   let
-      stl = if book==selectedBook then [Attr.style "font-weight" "bold"] else []
+      stl = if book==selectedBook then [Attr.css [fontWeight bold]] else []
   in
-  Html.li 
-    [Attr.style "list-style" "none"]
-    [ Html.button ( stl ++ S.btnText ++ [Event.onClick (Select book) ]) [Html.text (getBookTitle book) ]]
+  Styled.li 
+    [ Attr.css [listStyle none] ]
+    [ Styled.button 
+        ( stl ++ [S.btnText] ++ [Event.onClick (Select book) ]) 
+        [Styled.text (getBookTitle book) ]
+    ]
 
 
-mainView : List (Html Msg) -> Html Msg
+mainView : List (Styled.Html Msg) -> Styled.Html Msg
 mainView v = 
-    Html.div S.mainDivLight v
+    Styled.div 
+        [S.mainDivLight] 
+        v
 
 
-loadedView : Load -> List (Html Msg)
+loadedView : Load -> List (Styled.Html Msg)
 loadedView load = 
-  [ Html.div S.leftMenu 
-    [ Html.div S.navBarLogo [Html.text "Knotes"]
-    , Html.ul [Attr.style "padding-top" "60px"] (map (\b -> makeBookView b load.selectedBook) (sortBy .title load.books)) ]
-  , Html.div S.notesView 
+  [ Styled.div [S.leftMenu] 
+    [ Styled.div [S.navBarLogo] [Styled.text "Knotes"]
+    , Styled.ul [Attr.css [paddingTop (px 60)]] (List.map (\b -> makeBookView b load.selectedBook) (sortBy .title load.books)) ]
+  , Styled.div [S.notesView] 
     [ makeNoteHeader load.selectedBook
-    , Html.div S.notesList (map makeNoteView load.selectedNotes)]
+    , Styled.div [S.notesList] (List.map makeNoteView load.selectedNotes)]
   ]
 
 
-loadedViewEditBook : (Load, Book) -> List (Html Msg)
+loadedViewEditBook : (Load, Book) -> List (Styled.Html Msg)
 loadedViewEditBook (load, book) = 
-  [ Html.div S.leftMenu 
-    [ Html.div S.navBarLogo [Html.text "Knotes"]
-    , Html.ul [Attr.style "padding-top" "60px"] (map (\b -> makeBookView b load.selectedBook) load.books)  ]
-  , Html.div S.notesView 
+  [ Styled.div [S.leftMenu] 
+    [ Styled.div [S.navBarLogo] [Styled.text "Knotes"]
+    , Styled.ul [Attr.css [paddingTop (px 60)]] (List.map (\b -> makeBookView b load.selectedBook) load.books)  ]
+  , Styled.div [S.notesView] 
     [ editNoteHeader book
-    , Html.div S.notesList (map makeNoteView load.selectedNotes)]
+    , Styled.div [S.notesList] (List.map makeNoteView load.selectedNotes)]
   ]
 
 
-emptyView : List (Html Msg)
+emptyView : List (Styled.Html Msg)
 emptyView =   
-  [ Html.div S.emptyView 
-    [ Html.div S.emptyLogo [Html.text "Knotes"]
-    , Html.button (S.bigButton ++ [Event.onClick LoadNotes]) [Html.text "Load notes!"]
-    , Html.button (S.bigButton ++ [Event.onClick SelectFile]) [Html.text "Upload notes"]
+  [ Styled.div [S.emptyView] 
+    [ Styled.div [S.emptyLogo] [Styled.text "Knotes"]
+    , Styled.button ([S.bigButton] ++ [Event.onClick LoadNotes]) [Styled.text "Load notes!"]
+    , Styled.button ([S.bigButton] ++ [Event.onClick SelectFile]) [Styled.text "Upload notes"]
     ]
   ]
 
 
-uploadingView : Float -> List (Html Msg)
+uploadingView : Float -> List (Styled.Html Msg)
 uploadingView progress =   
-  [ Html.div S.emptyView 
-    [ Html.div S.emptyLogo [Html.text "Knotes"]
-    , Html.button (S.bigButton ++ [Event.onClick LoadNotes]) [Html.text "Load notes!"]
-    , Html.button (S.bigButton ++ [Event.onClick SelectFile]) [Html.text "Upload notes"]
-    , Html.div [] [Html.text ("Uploading prgoress: " ++ (Debug.toString progress))]
+  [ Styled.div [S.emptyView] 
+    [ Styled.div [S.emptyLogo] [Styled.text "Knotes"]
+    , Styled.button ([S.bigButton] ++ [Event.onClick LoadNotes]) [Styled.text "Load notes!"]
+    , Styled.button ([S.bigButton] ++ [Event.onClick SelectFile]) [Styled.text "Upload notes"]
+    , Styled.div [] [Styled.text ("Uploading prgoress: " ++ (Debug.toString progress))]
     ]
   ]
 
 
-errorView : Error -> List (Html Msg)
+errorView : Error -> List (Styled.Html Msg)
 errorView code =   
-  [ Html.div S.emptyView 
-    [ Html.div S.emptyLogo [Html.text "Knotes"]
-    , Html.button (S.bigButton ++ [Event.onClick LoadNotes]) [Html.text "Load notes!"]
-    , Html.button (S.bigButton ++ [Event.onClick SelectFile]) [Html.text "Upload notes"]
-    , Html.div [Attr.style "color" "#606060", Attr.style "font-size" "12pt"] 
-      [Html.text ("Whoops! Something went wrong! Error: " ++ (code |> toString |> String.toLower))]
+  [ Styled.div [S.emptyView] 
+    [ Styled.div [S.emptyLogo] [Styled.text "Knotes"]
+    , Styled.button ([S.bigButton] ++ [Event.onClick LoadNotes]) [Styled.text "Load notes!"]
+    , Styled.button ([S.bigButton] ++ [Event.onClick SelectFile]) [Styled.text "Upload notes"]
+    , Styled.div [Attr.css [color (hex "#606060"), fontSize (pt 12)]] 
+      [Styled.text ("Whoops! Something went wrong! Error: " ++ (code |> toString |> String.toLower))]
     ]
   ]
