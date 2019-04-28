@@ -2,7 +2,7 @@ module Notes            exposing (Book, Note, Author, Title, getId, getTitle
                         , getAuthor, getBody, getInfo, getBookTitle
                         , getBook, noteDecoder, bookDecoder, initNotes
                         , filterNotes, getBookAuthor, newBook
-                        , bookEncoder)
+                        , bookEncoder, similarNotes)
 
 import Json.Decode      as D exposing ( Decoder, field, string
                         , list, int, map2, map4 )
@@ -26,7 +26,12 @@ type alias Note =
   , id: Int
   }
 
+type alias Location =
+  { from: Int
+  , to: Int
+  }
 
+-- HELPERS
 
 getAuthor : Note -> Author
 getAuthor nt = nt.book.author
@@ -61,7 +66,6 @@ getBookAuthor bk = bk.author
 newBook : Title -> Author -> Book
 newBook t a = {title = t, author = a}
 
--- editBook : String ->
 
 filterNotes : Book -> List Note -> List Note
 filterNotes bk nts = filter (\n -> n.book == bk) nts
@@ -73,6 +77,7 @@ initNotes bks nts =
     Nothing -> (Nothing, [])
     Just bk -> (Just bk, filterNotes bk nts)
 
+-- DECODERS
 
 bookDecoder : Decoder Book
 bookDecoder = 
@@ -95,3 +100,34 @@ bookEncoder book =
     E.object 
         [ ("author", E.string book.author)
         , ("title", E.string book.title ) ]
+
+
+-- NOTES DEDUPLICATION
+
+locationToRange : Note -> Maybe (Int, Location)
+locationToRange note =
+  let 
+    range = map String.toInt <| String.split "-" <| String.slice 27 34 <| note.info
+  in
+  case range of
+    [Just x, Just y] -> Just (note.id, {from=x, to=y})
+    _ -> Nothing
+  
+
+similarNotesIds : (Int, Location) -> List (Int, Location) -> List Int
+similarNotesIds (i, l) xs =
+  xs |> filter (\(j, x) -> ((x.from == l.from) || (x.to == l.to))) |> map Tuple.first
+
+
+findSimilarNotes : List (Int, Location) -> List Int
+findSimilarNotes nts = 
+  case (head nts, tail nts) of
+      (Just h, Just t) -> (similarNotesIds h t) ++ (findSimilarNotes t)
+      _ -> []
+          
+
+similarNotes : List Note -> List Int
+similarNotes nts =
+  nts |> filterMap locationToRange |> findSimilarNotes
+
+  

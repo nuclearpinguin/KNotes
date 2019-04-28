@@ -47,6 +47,7 @@ type Model = New
   | Loading Float
   | Loaded Load
   | EditingBook Load Book
+  | HighlightDuplicates Load (List Int)
 
 
 type Msg = Nil 
@@ -68,6 +69,8 @@ type Msg = Nil
   | SaveBook 
   | BookUpdated (Result Http.Error ())
   | Cancel 
+  -- Highligh similar notes
+  | Highlight
 
 
 apiUrl : String
@@ -101,7 +104,7 @@ deleteNoteAPI id =
   Http.request
     { method = "DELETE"
     , headers = []
-    , url = Builder.crossOrigin apiUrl ["notes"] [Builder.int "id" id]
+    , url = Builder.crossOrigin apiUrl ["notes", String.fromInt id] []
     , body = Http.emptyBody -- Encode.object [("id", Encode.int id)] |> Http.jsonBody
     , expect = Http.expectWhatever Removed
     , timeout = Nothing
@@ -125,9 +128,9 @@ uploadNotesAPI content =
 updateBookAPI : Book -> Book -> Cmd Msg
 updateBookAPI oldBk newBk =
   Http.request
-    { method = "POST"
+    { method = "PUT"
     , headers = []
-    , url = Builder.crossOrigin apiUrl ["update", "book"] []
+    , url = Builder.crossOrigin apiUrl ["books"] []
     , body = Http.jsonBody (E.list bookEncoder [oldBk, newBk])
     , expect = Http.expectWhatever BookUpdated
     , timeout = Nothing
@@ -182,9 +185,16 @@ update msg model =
   case tmp of
     -- User select book to see list of notes
     (Select bk, Loaded load) -> (Loaded {load | selectedNotes = filterNotes bk load.notes, selectedBook = bk}, Cmd.none)
+    (Select bk, HighlightDuplicates load _ ) -> (Loaded {load | selectedNotes = filterNotes bk load.notes, selectedBook = bk}, Cmd.none)
 
     -- Removes one note
     (RemoveNote id, Loaded load )-> (Loaded (filterRemovedNote load id), deleteNoteAPI id)
+    (RemoveNote id, HighlightDuplicates load ids )-> 
+        let
+            newLoad = filterRemovedNote load id
+            newIds = similarNotes newLoad.selectedNotes
+        in
+        (HighlightDuplicates newLoad newIds, deleteNoteAPI id)
 
     -- Upload of the clippings.txt
     (SelectFile, _ ) -> (model, Select.file ["text"] FileSelected)
@@ -213,6 +223,10 @@ update msg model =
         Err err -> (Loaded load, Cmd.none)
     (Cancel, EditingBook load _ ) -> (Loaded load, Cmd.none)
 
+    -- Highlight similar books
+    (Highlight, Loaded load) -> (HighlightDuplicates load (similarNotes load.selectedNotes), Cmd.none)
+    (Highlight, HighlightDuplicates load _) -> (Loaded load, Cmd.none)
+
     -- Otherwise do nothing 
     ( _ , _ ) -> (model, Cmd.none)
 
@@ -227,6 +241,7 @@ view model =
     Failure code -> code |> errorView |> mainView 
     Loaded load -> load |> loadedView |> mainView 
     EditingBook load book -> (load, book) |> loadedViewEditBook |> mainView 
+    HighlightDuplicates load ids -> (load, ids) |> loadedViewHighlight |> mainView
 
 
 makeNoteView : Note -> Styled.Html Msg
@@ -237,13 +252,28 @@ makeNoteView note =
     , Styled.p [] [Styled.text note.body]
     ]
 
+makeNoteViewHiglighted : Note -> List Int -> Styled.Html Msg
+makeNoteViewHiglighted note ids = 
+  let
+      stl = if (member note.id ids) then [color (hex "#80ac7b"), fontWeight bold] else [color (hex "#606060")]
+  in
+  
+  Styled.div [S.noteDiv] 
+    [ Styled.span [Attr.css stl] [Styled.text (getInfo note) ]
+    , Styled.button ([S.button] ++ [Event.onClick (RemoveNote note.id)]) [Styled.text "Remove"]
+    , Styled.p [] [Styled.text note.body]
+    ]
 
-makeNoteHeader : Book -> Styled.Html Msg
-makeNoteHeader bk = 
+makeNoteHeader : Book -> Bool -> Styled.Html Msg
+makeNoteHeader bk highlight_on = 
+  let
+      stl = if highlight_on then [S.button, Attr.css [fontWeight bold]] else [S.button]
+  in
   Styled.div [S.boldHeader]
     [ Styled.text (getBookTitle bk)
     , Styled.div [Attr.css [color (hex "#606060")]] [Styled.text (getBookAuthor bk)]
     , Styled.button ([S.button] ++ [Event.onClick EditBook]) [Styled.text "Edit"]
+    , Styled.button (stl ++ [Event.onClick Highlight]) [Styled.text "duplicates"]
     ]
 
 
@@ -277,7 +307,11 @@ makeBookView book selectedBook =
         [Styled.text (getBookTitle book) ]
     ]
 
+makeBookList : Load -> List (Styled.Html Msg)
+makeBookList load =
+    List.map (\b -> makeBookView b load.selectedBook) (sortBy .title load.books)
 
+    
 mainView : List (Styled.Html Msg) -> Styled.Html Msg
 mainView v = 
     Styled.div 
@@ -289,9 +323,9 @@ loadedView : Load -> List (Styled.Html Msg)
 loadedView load = 
   [ Styled.div [S.leftMenu] 
     [ Styled.div [S.navBarLogo] [Styled.text "Knotes"]
-    , Styled.ul [Attr.css [paddingTop (px 60)]] (List.map (\b -> makeBookView b load.selectedBook) (sortBy .title load.books)) ]
+    , Styled.ul [Attr.css [paddingTop (px 60)]] (makeBookList load) ]
   , Styled.div [S.notesView] 
-    [ makeNoteHeader load.selectedBook
+    [ makeNoteHeader load.selectedBook False
     , Styled.div [S.notesList] (List.map makeNoteView load.selectedNotes)]
   ]
 
@@ -300,10 +334,21 @@ loadedViewEditBook : (Load, Book) -> List (Styled.Html Msg)
 loadedViewEditBook (load, book) = 
   [ Styled.div [S.leftMenu] 
     [ Styled.div [S.navBarLogo] [Styled.text "Knotes"]
-    , Styled.ul [Attr.css [paddingTop (px 60)]] (List.map (\b -> makeBookView b load.selectedBook) load.books)  ]
+    , Styled.ul [Attr.css [paddingTop (px 60)]] (makeBookList load)  ]
   , Styled.div [S.notesView] 
     [ editNoteHeader book
     , Styled.div [S.notesList] (List.map makeNoteView load.selectedNotes)]
+  ]
+
+
+loadedViewHighlight : (Load, List Int) -> List (Styled.Html Msg)
+loadedViewHighlight (load, ids) = 
+  [ Styled.div [S.leftMenu] 
+    [ Styled.div [S.navBarLogo] [Styled.text "Knotes"]
+    , Styled.ul [Attr.css [paddingTop (px 60)]] (makeBookList load) ]
+  , Styled.div [S.notesView] 
+    [ makeNoteHeader load.selectedBook True
+    , Styled.div [S.notesList] (List.map (\n -> makeNoteViewHiglighted n ids) load.selectedNotes)]
   ]
 
 
