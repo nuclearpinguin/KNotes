@@ -6,13 +6,15 @@ import Html.Styled      exposing (..)
 import Html.Styled.Attributes exposing (css, href, src)
 import Html.Styled.Events     exposing (onClick)
 
-
+-- e8eaa1
 -- Main view
 mainDivLight : Attribute a
 mainDivLight = css
     [ minHeight (pct 100)
     , minWidth (pct 100)
     , fontFamilies [ "Arial" ]
+    , color (hex "373331")
+    -- , backgroundColor (hex "39424e")
     , position relative ]
 
 
@@ -36,7 +38,7 @@ leftMenu = css
     , height (pct 100)
     , position fixed
     , borderRight2 (px 4) solid 
-    , borderColor (hex "#C0C0C0")
+    , borderColor (hex "605a56")
     , overflowY scroll
     , boxSizing contentBox]
 
@@ -60,7 +62,8 @@ notesView : Attribute a
 notesView = css
     [ float right
     , marginRight (vw 5)
-    , width (vw 70)]
+    , marginLeft (vw 20)
+    , position absolute]
 
 boldHeader : Attribute a
 boldHeader = css
@@ -68,10 +71,11 @@ boldHeader = css
     , fontWeight bold
     , fontSize (pt 42)
     , textAlign left
-    , position relative
+    -- , position fixed
     , height auto
     , overflowY auto
     , paddingBottom (px 50)
+    -- , selection [backgroundColor (hex "80ac7b")]
     , overflowX hidden]
 
 
@@ -85,6 +89,7 @@ bigTextArea = css
     , minHeight (pt 46)
     , resize none
     , border (px 0)
+    -- , selection [backgroundColor (hex "80ac7b")]
     , overflow hidden]
 
 
@@ -98,6 +103,11 @@ noteDiv : Attribute a
 noteDiv = css  
     [ paddingBottom (px 20)
     , textAlign left ]
+
+
+noteParagraph : Attribute a
+noteParagraph = css  
+    [ selection [backgroundColor (hex "80ac7b")]]
     
 
 button : Attribute a
@@ -105,10 +115,10 @@ button = css
     [ textTransform uppercase
     , backgroundColor (hex "#ffffff")
     , fontSize (pt 12)
-    , color  (hex "#C0C0C0")
+    , color  (hex "605a56")
     , cursor pointer
     , border (px 0)
-    , hover [fontWeight bold]
+    , hover [color (hex "80ac7b")]
     ]
 
 -- Empty view 
@@ -135,7 +145,7 @@ bigButton = css
     [ textTransform uppercase
     , backgroundColor inherit
     , fontSize (pt 24)
-    , color (hex "#C0C0C0")
+    , color (hex "605a56")
     , cursor pointer
     , border (px 0)
     , hover [fontWeight bold]]

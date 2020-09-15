@@ -42,7 +42,6 @@ share
             info Text
             UniqueNote book info
             -- test Tezt default=''
-            -- NoteKey body
             deriving Show Eq
 |]
 
@@ -77,8 +76,8 @@ uniqueBooks ns = nub $ map getBook ns
 
 
 uniqueAuthors :: [Book] -> [Author]
-uniqueAuthors bs = map getAuthor bs
+uniqueAuthors bs = nub $ map getAuthor bs
 
 
 uniqueTitles :: [Book] -> [Title]
-uniqueTitles bs = map getTitle bs
+uniqueTitles bs = nub $ map getTitle bs

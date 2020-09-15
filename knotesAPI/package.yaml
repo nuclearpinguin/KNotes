@@ -35,6 +35,9 @@ dependencies:
 - unordered-containers
 - bytestring
 - parsec
+- hspec
+- hspec-wai
+- wai
 
 library:
   source-dirs: src

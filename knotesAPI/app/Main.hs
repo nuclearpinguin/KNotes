@@ -5,6 +5,8 @@
 {-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE GADTs                      #-}
 
+module Main (main, app) where
+
 import Debug.Trace
 import Data.Text.Encoding (decodeUtf8)
 
@@ -23,6 +25,7 @@ import Database.Persist             hiding ( get ) -- To avoid clash with Web.Sp
 import Database.Persist.Sqlite      as PSQL hiding ( get )
 -- import Database.Persist.PostgreSQL      as PSQL hiding ( get )
 import Database.Persist.TH          
+import Network.Wai                          ( Middleware )
 import Network.Wai.Middleware.RequestLogger ( logStdoutDev )
 import Network.Wai.Parse                    ( fileContent )
 
@@ -52,9 +55,12 @@ makeResponse status msg =
 
 
 -- SERVER
-
 main :: IO ()
-main = do
+main = runSpock 3000 $ fmap (logStdoutDev.) app
+
+
+app :: IO Middleware
+app = do
     -- Create db connection
     pool <- runStdoutLoggingT $ createSqlitePool "api.db" 5
 
@@ -65,7 +71,7 @@ main = do
     -- Migrate
     runStdoutLoggingT $ runSqlPool (do runMigration migrateAll) pool
 
-    runSpock 3000 $ fmap (logStdoutDev.) $ spock spockCfg $ do app
+    spock spockCfg routes
 
 
 -- API
@@ -77,14 +83,18 @@ corsHeader :: ActionCtxT b (WebStateM SqlBackend () ()) b
 corsHeader =
     do ctx <- WS.getContext
        WS.setHeader "Access-Control-Allow-Origin" "*"
-       WS.setHeader "Access-Control-Allow-Methods" "GET,POST,DELETE,OPTIONS"
+       WS.setHeader "Access-Control-Allow-Methods" "GET,POST,PUT,DELETE,OPTIONS"
        WS.setHeader "Access-Control-Allow-Headers" "Content-Type, Authorization, Content-Length, X-Requested-With"
        pure ctx
 
 
-app :: Api
-app = prehook corsHeader $ do
+routes :: Api
+routes = prehook corsHeader $ do
     WS.hookAny OPTIONS (\path -> corsHeader)
+
+    WS.get "books" $ do
+        allBooks <- runSQL $ selectList [] [Asc BookId]
+        json $ allBooks
 
     WS.get "notes" $ do
         allNotes <- runSQL $ selectList [] [Asc NoteId]
@@ -100,18 +110,14 @@ app = prehook corsHeader $ do
                 allNotes <- runSQL $ selectList [] [Asc NoteId]
                 json $ allNotes
     
-    WS.delete "notes" $ do
-        maybeId <- param "id"
-        case maybeId of
-            Nothing -> makeResponse badRequest400 "Id do not exists."
-            Just id -> do
-                rmvId <- runSQL $ PSQL.delete (makeNoteKey id)
-                makeResponse accepted202 "success"
+    WS.delete ("notes" <//> var) $ \noteId -> do
+        rmvId <- runSQL $ PSQL.delete (makeNoteKey noteId)
+        makeResponse accepted202 "success"
 
-    WS.post "update/book" $ do
+    WS.put "books" $ do
         maybeBooks <- jsonBody :: ApiAction (Maybe (Book, Book))
         case maybeBooks of
-            Nothing -> makeResponse badRequest400 "JSON body corrupted"
+            Nothing -> makeResponse badRequest400 "JSON body corrupted."
             Just (bkOld, bkNew) -> do
                 smth <- runSQL $ updateWhere [NoteBook ==. bkOld] [NoteBook =. bkNew]
                 makeResponse ok200 "success"
